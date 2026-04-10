@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smith Fleet Management Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚛</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; min-height: 100vh; }
+    #app { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    const vehicles = [
+      { id: 'SM-001', name: 'Freightliner M2', driver: 'Marcus Johnson', avatar: 'MJ', status: 'active', fuel: 78, location: 'Route 66, Oklahoma', speed: 62, mileage: 124500, phone: '(555) 123-4567', email: 'marcus.j@smith.com', trips: 847, revenue: 142500 },
+      { id: 'SM-002', name: 'Peterbilt 579', driver: 'Sarah Chen', avatar: 'SC', status: 'active', fuel: 45, location: 'I-40, Texas', speed: 58, mileage: 89200, phone: '(555) 234-5678', email: 'sarah.c@smith.com', trips: 623, revenue: 98700 },
+      { id: 'SM-003', name: 'Kenworth T680', driver: 'James Wilson', avatar: 'JW', status: 'maintenance', fuel: 92, location: 'Service Bay 3', speed: 0, mileage: 156800, phone: '(555) 345-6789', email: 'james.w@smith.com', trips: 1205, revenue: 187600 },
+      { id: 'SM-004', name: 'Volvo VNL', driver: 'Emily Rodriguez', avatar: 'ER', status: 'active', fuel: 23, location: 'I-10, Arizona', speed: 71, mileage: 67400, phone: '(555) 456-7890', email: 'emily.r@smith.com', trips: 412, revenue: 67300 },
+      { id: 'SM-005', name: 'Mack Anthem', driver: 'David Kim', avatar: 'DK', status: 'idle', fuel: 88, location: 'Depot Alpha', speed: 0, mileage: 203100, phone: '(555) 567-8901', email: 'david.k@smith.com', trips: 1567, revenue: 234500 },
+      { id: 'SM-006', name: 'International LT', driver: 'Lisa Thompson', avatar: 'LT', status: 'active', fuel: 56, location: 'US-287, Colorado', speed: 55, mileage: 112300, phone: '(555) 678-9012', email: 'lisa.t@smith.com', trips: 891, revenue: 145200 },
+    ];
+
+    let state = {
+      page: 'dashboard',
+      filter: 'All',
+      showModal: false,
+      modalVehicle: null,
+      showAddModal: false,
+      showDownloadToast: false,
+      downloadedReport: '',
+      settings: { notifications: true, darkMode: true, autoRefresh: true, units: 'imperial' }
+    };
+
+    function getStatusColor(s) { return s === 'active' ? '#10b981' : s === 'idle' ? '#f59e0b' : '#ef4444'; }
+    function getStatusBg(s) { return s === 'active' ? 'rgba(16,185,129,0.15)' : s === 'idle' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'; }
+    function getFuelColor(l) { return l < 25 ? '#ef4444' : l < 50 ? '#f59e0b' : '#10b981'; }
+
+    function renderSidebar() {
+      const maintCount = vehicles.filter(v => v.status === 'maintenance').length;
+      const navItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'fleet', label: 'Fleet', icon: '🚛', badge: vehicles.length },
+        { id: 'drivers', label: 'Drivers', icon: '👥' },
+        { id: 'maintenance', label: 'Maintenance', icon: '🔧', alert: maintCount > 0 ? maintCount : null },
+        { id: 'reports', label: 'Reports', icon: '📄' },
+      ];
+      
+      return `
+        <div style="width: 240px; min-width: 240px; background: rgba(24,24,27,0.5); border-right: 1px solid rgba(255,255,255,0.06); padding: 24px 16px; display: flex; flex-direction: column; backdrop-filter: blur(10px);">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 40px; padding: 0 8px;">
+            <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(245,158,11,0.3);">
+              <span style="font-size: 24px;">🚛</span>
+            </div>
+            <div>
+              <div style="color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">SMITH</div>
+              <div style="color: #52525b; font-size: 10px; letter-spacing: 2px; font-weight: 600;">FLEET MANAGEMENT</div>
+            </div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+            ${navItems.map(item => `
+              <button onclick="navigate('${item.id}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s; background: ${state.page === item.id ? 'linear-gradient(90deg, rgba(245,158,11,0.15), rgba(245,158,11,0.02))' : 'transparent'}; border: 1px solid ${state.page === item.id ? 'rgba(245,158,11,0.25)' : 'transparent'}; color: ${state.page === item.id ? '#fbbf24' : '#a1a1aa'}; font-size: 14px; font-weight: 500; text-align: left;">
+                <span style="font-size: 18px;">${item.icon}</span>
+                <span style="flex: 1;">${item.label}</span>
+                ${item.badge ? `<span style="background: #f59e0b; color: #0a0a0b; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px;">${item.badge}</span>` : ''}
+                ${item.alert ? `<span style="background: #ef4444; color: white; font-size: 11px; font-weight: 700; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">${item.alert}</span>` : ''}
+              </button>
+            `).join('')}
+            
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.06);">
+              <button onclick="navigate('settings')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: none; border-radius: 12px; cursor: pointer; width: 100%; background: ${state.page === 'settings' ? 'linear-gradient(90deg, rgba(245,158,11,0.15), rgba(245,158,11,0.02))' : 'transparent'}; border: 1px solid ${state.page === 'settings' ? 'rgba(245,158,11,0.25)' : 'transparent'}; color: ${state.page === 'settings' ? '#fbbf24' : '#a1a1aa'}; font-size: 14px; font-weight: 500; text-align: left;">
+                <span style="font-size: 18px;">⚙️</span>
+                <span>Settings</span>
+              </button>
+            </div>
+          </div>
+          
+          <div style="padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.06);">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 14px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="width: 42px; height: 42px; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700;">MS</div>
+              <div>
+                <div style="color: white; font-size: 14px; font-weight: 600;">Mike Smith</div>
+                <div style="color: #52525b; font-size: 12px;">Fleet Manager</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDashboard() {
+      const activeCount = vehicles.filter(v => v.status === 'active').length;
+      const avgFuel = Math.round(vehicles.reduce((a, v) => a + v.fuel, 0) / vehicles.length);
+      const maintCount = vehicles.filter(v => v.status === 'maintenance').length;
+      const totalRevenue = vehicles.reduce((a, v) => a + v.revenue, 0);
+      
+      return `
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+            <div>
+              <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Dashboard</div>
+              <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Fleet overview and statistics</div>
+            </div>
+            <button onclick="openAddModal()" style="padding: 14px 24px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(245,158,11,0.25); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 25px rgba(245,158,11,0.35)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 20px rgba(245,158,11,0.25)';">+ Add Vehicle</button>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
+            <div onclick="navigate('fleet')" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05)); border: 1px solid rgba(16,185,129,0.2); border-radius: 18px; padding: 20px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 30px rgba(16,185,129,0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+              <div style="color: #a1a1aa; font-size: 12px; font-weight: 500;">Active Vehicles</div>
+              <div style="color: white; font-size: 36px; font-weight: 800; margin: 8px 0;">${activeCount}</div>
+              <div style="color: #34d399; font-size: 12px; font-weight: 500;">Click to view fleet →</div>
+            </div>
+            <div style="background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05)); border: 1px solid rgba(245,158,11,0.2); border-radius: 18px; padding: 20px;">
+              <div style="color: #a1a1aa; font-size: 12px; font-weight: 500;">Avg. Fuel Level</div>
+              <div style="color: white; font-size: 36px; font-weight: 800; margin: 8px 0;">${avgFuel}%</div>
+              <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 6px; margin-top: 8px;"><div style="width: ${avgFuel}%; height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 6px;"></div></div>
+            </div>
+            <div onclick="navigate('reports')" style="background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05)); border: 1px solid rgba(59,130,246,0.2); border-radius: 18px; padding: 20px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 30px rgba(59,130,246,0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+              <div style="color: #a1a1aa; font-size: 12px; font-weight: 500;">Total Revenue</div>
+              <div style="color: white; font-size: 36px; font-weight: 800; margin: 8px 0;">$${(totalRevenue/1000).toFixed(0)}K</div>
+              <div style="color: #60a5fa; font-size: 12px; font-weight: 500;">View reports →</div>
+            </div>
+            <div onclick="navigate('maintenance')" style="background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05)); border: 1px solid rgba(239,68,68,0.2); border-radius: 18px; padding: 20px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 30px rgba(239,68,68,0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+              <div style="color: #a1a1aa; font-size: 12px; font-weight: 500;">Maintenance Due</div>
+              <div style="color: white; font-size: 36px; font-weight: 800; margin: 8px 0;">${maintCount}</div>
+              <div style="color: #f87171; font-size: 12px; font-weight: 500;">Click to view →</div>
+            </div>
+          </div>
+          
+          <div style="color: white; font-size: 20px; font-weight: 700; margin-bottom: 16px;">Recent Activity</div>
+          <div style="display: grid; gap: 12px;">
+            ${vehicles.filter(v => v.status === 'active').slice(0, 4).map(v => `
+              <div onclick="openModal('${v.id}')" style="display: flex; align-items: center; gap: 16px; padding: 18px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)';" onmouseout="this.style.background='rgba(255,255,255,0.03)'; this.style.borderColor='rgba(255,255,255,0.06)';">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, ${getStatusColor(v.status)}, ${getStatusColor(v.status)}cc); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700;">${v.avatar}</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-size: 16px; font-weight: 600;">${v.name}</div>
+                  <div style="color: #71717a; font-size: 13px; margin-top: 2px;">${v.location}</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="color: #34d399; font-size: 18px; font-weight: 700;">${v.speed} mph</div>
+                  <div style="color: #71717a; font-size: 12px; margin-top: 2px;">Fuel: ${v.fuel}%</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFleet() {
+      const filtered = state.filter === 'All' ? vehicles : vehicles.filter(v => v.status === state.filter.toLowerCase());
+      return `
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+            <div>
+              <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Fleet Management</div>
+              <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Manage all ${vehicles.length} vehicles</div>
+            </div>
+            <button onclick="openAddModal()" style="padding: 14px 24px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(245,158,11,0.25);">+ Add Vehicle</button>
+          </div>
+          
+          <div style="display: flex; gap: 6px; padding: 6px; background: rgba(255,255,255,0.03); border-radius: 14px; margin-bottom: 24px; width: fit-content; border: 1px solid rgba(255,255,255,0.05);">
+            ${['All', 'Active', 'Idle', 'Maintenance'].map(f => `
+              <button onclick="setFilter('${f}')" style="padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; background: ${state.filter === f ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent'}; color: ${state.filter === f ? '#0a0a0b' : '#71717a'};">${f}</button>
+            `).join('')}
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+            ${filtered.map(v => `
+              <div onclick="openModal('${v.id}')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 20px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='rgba(255,255,255,0.03)'; this.style.borderColor='rgba(255,255,255,0.06)'; this.style.transform='translateY(0)';">
+                <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
+                  <div style="width: 52px; height: 52px; background: linear-gradient(135deg, ${getStatusColor(v.status)}, ${getStatusColor(v.status)}cc); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; font-weight: 700;">${v.avatar}</div>
+                  <div style="flex: 1;">
+                    <div style="color: white; font-size: 16px; font-weight: 600;">${v.name}</div>
+                    <div style="color: #71717a; font-size: 13px; margin-top: 2px;">${v.driver}</div>
+                  </div>
+                  <span style="padding: 6px 12px; background: ${getStatusBg(v.status)}; border-radius: 20px; color: ${getStatusColor(v.status)}; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${v.status}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="color: #71717a;">ID</span><span style="color: #fbbf24; font-family: monospace; font-weight: 600;">${v.id}</span></div>
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px;"><span style="color: #71717a;">Location</span><span style="color: #d4d4d8;">${v.location}</span></div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 6px;"><div style="width: ${v.fuel}%; height: 100%; background: ${getFuelColor(v.fuel)}; border-radius: 6px;"></div></div>
+                  <span style="color: ${getFuelColor(v.fuel)}; font-size: 12px; font-weight: 600;">${v.fuel}%</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDrivers() {
+      return `
+        <div>
+          <div style="margin-bottom: 32px;">
+            <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Drivers</div>
+            <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Manage your ${vehicles.length} drivers</div>
+          </div>
+          
+          <div style="display: grid; gap: 14px;">
+            ${vehicles.map(v => `
+              <div style="display: flex; align-items: center; gap: 18px; padding: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)';" onmouseout="this.style.background='rgba(255,255,255,0.03)';">
+                <div style="width: 64px; height: 64px; background: linear-gradient(135deg, ${getStatusColor(v.status)}, ${getStatusColor(v.status)}cc); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: 700;">${v.avatar}</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-size: 18px; font-weight: 600;">${v.driver}</div>
+                  <div style="color: #71717a; font-size: 14px; margin-top: 4px;">${v.email}</div>
+                  <div style="color: #a1a1aa; font-size: 13px; margin-top: 2px;">${v.phone}</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="color: #fbbf24; font-family: monospace; font-size: 14px; font-weight: 600;">${v.id}</div>
+                  <div style="color: #71717a; font-size: 13px; margin-top: 4px;">${v.name}</div>
+                  <span style="display: inline-block; margin-top: 6px; padding: 4px 10px; background: ${getStatusBg(v.status)}; border-radius: 14px; color: ${getStatusColor(v.status)}; font-size: 11px; font-weight: 700; text-transform: uppercase;">${v.status}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMaintenance() {
+      const maintVehicles = vehicles.filter(v => v.status === 'maintenance');
+      const needService = vehicles.filter(v => v.fuel < 30);
+      return `
+        <div>
+          <div style="margin-bottom: 32px;">
+            <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Maintenance</div>
+            <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Vehicle service and repairs</div>
+          </div>
+          
+          <div style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">🔧 Currently In Service <span style="background: rgba(239,68,68,0.2); color: #f87171; font-size: 12px; padding: 4px 10px; border-radius: 10px;">${maintVehicles.length}</span></div>
+          ${maintVehicles.length > 0 ? maintVehicles.map(v => `
+            <div style="padding: 20px; background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.05)); border: 1px solid rgba(239,68,68,0.2); border-radius: 18px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; font-weight: 700;">${v.avatar}</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-size: 17px; font-weight: 600;">${v.name}</div>
+                  <div style="color: #f87171; font-size: 14px; margin-top: 4px;">${v.location}</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="color: #fbbf24; font-family: monospace; font-size: 14px; font-weight: 600;">${v.id}</div>
+                  <div style="color: #71717a; font-size: 13px; margin-top: 4px;">Driver: ${v.driver}</div>
+                </div>
+              </div>
+            </div>
+          `).join('') : '<div style="color: #71717a; padding: 40px; text-align: center; background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">No vehicles in maintenance</div>'}
+          
+          <div style="color: white; font-size: 18px; font-weight: 700; margin: 32px 0 16px; display: flex; align-items: center; gap: 10px;">⚠️ Low Fuel Alert <span style="background: rgba(245,158,11,0.2); color: #fbbf24; font-size: 12px; padding: 4px 10px; border-radius: 10px;">${needService.length}</span></div>
+          ${needService.length > 0 ? needService.map(v => `
+            <div style="padding: 20px; background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05)); border: 1px solid rgba(245,158,11,0.2); border-radius: 18px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; font-weight: 700;">${v.avatar}</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-size: 17px; font-weight: 600;">${v.name}</div>
+                  <div style="color: #fbbf24; font-size: 14px; margin-top: 4px;">Fuel: ${v.fuel}% - Needs refuel</div>
+                </div>
+                <button style="padding: 12px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 13px; font-weight: 700; cursor: pointer;">Schedule</button>
+              </div>
+            </div>
+          `).join('') : '<div style="color: #71717a; padding: 40px; text-align: center; background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">All vehicles have adequate fuel</div>'}
+        </div>
+      `;
+    }
+
+    function renderReports() {
+      const totalMileage = vehicles.reduce((a, v) => a + v.mileage, 0);
+      const totalTrips = vehicles.reduce((a, v) => a + v.trips, 0);
+      const totalRevenue = vehicles.reduce((a, v) => a + v.revenue, 0);
+      const avgFuel = Math.round(vehicles.reduce((a, v) => a + v.fuel, 0) / vehicles.length);
+      
+      const reports = [
+        { id: 'fleet', name: 'Fleet Summary Report', desc: 'Complete overview of all vehicles, status, and metrics', icon: '🚛', format: 'PDF' },
+        { id: 'driver', name: 'Driver Performance Report', desc: 'Individual driver stats, trips completed, and efficiency', icon: '👥', format: 'PDF' },
+        { id: 'maintenance', name: 'Maintenance History', desc: 'Service records, repairs, and scheduled maintenance', icon: '🔧', format: 'PDF' },
+        { id: 'fuel', name: 'Fuel Consumption Report', desc: 'Fuel usage, costs, and efficiency analysis', icon: '⛽', format: 'CSV' },
+        { id: 'revenue', name: 'Revenue Report', desc: 'Income by vehicle, driver, and time period', icon: '💰', format: 'XLSX' },
+        { id: 'mileage', name: 'Mileage Log', desc: 'Detailed mileage tracking for all vehicles', icon: '📏', format: 'CSV' },
+      ];
+      
+      return `
+        <div>
+          <div style="margin-bottom: 32px;">
+            <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Reports</div>
+            <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Download fleet reports and analytics</div>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px; text-align: center;">
+              <div style="color: #71717a; font-size: 12px; font-weight: 500; margin-bottom: 6px;">Total Mileage</div>
+              <div style="color: white; font-size: 28px; font-weight: 800;">${(totalMileage/1000).toFixed(0)}K mi</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px; text-align: center;">
+              <div style="color: #71717a; font-size: 12px; font-weight: 500; margin-bottom: 6px;">Total Trips</div>
+              <div style="color: white; font-size: 28px; font-weight: 800;">${totalTrips.toLocaleString()}</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px; text-align: center;">
+              <div style="color: #71717a; font-size: 12px; font-weight: 500; margin-bottom: 6px;">Total Revenue</div>
+              <div style="color: #34d399; font-size: 28px; font-weight: 800;">$${(totalRevenue/1000).toFixed(0)}K</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px; text-align: center;">
+              <div style="color: #71717a; font-size: 12px; font-weight: 500; margin-bottom: 6px;">Avg Fuel</div>
+              <div style="color: #f59e0b; font-size: 28px; font-weight: 800;">${avgFuel}%</div>
+            </div>
+          </div>
+          
+          <div style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 16px;">Available Reports</div>
+          <div style="display: grid; gap: 12px;">
+            ${reports.map(r => `
+              <div style="display: flex; align-items: center; gap: 16px; padding: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)';" onmouseout="this.style.background='rgba(255,255,255,0.03)';">
+                <div style="width: 56px; height: 56px; background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05)); border: 1px solid rgba(245,158,11,0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px;">${r.icon}</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-size: 16px; font-weight: 600;">${r.name}</div>
+                  <div style="color: #71717a; font-size: 13px; margin-top: 4px;">${r.desc}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="padding: 6px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; color: #a1a1aa; font-size: 12px; font-weight: 600;">${r.format}</span>
+                  <button onclick="downloadReport('${r.name}', '${r.format}')" style="padding: 12px 22px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)';" onmouseout="this.style.transform='scale(1)';">
+                    <span>⬇</span> Download
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div style="margin-top: 28px; padding: 24px; background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05)); border: 1px solid rgba(59,130,246,0.2); border-radius: 18px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="width: 56px; height: 56px; background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.1)); border: 1px solid rgba(59,130,246,0.3); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px;">📊</div>
+              <div style="flex: 1;">
+                <div style="color: white; font-size: 16px; font-weight: 600;">Custom Report Builder</div>
+                <div style="color: #71717a; font-size: 13px; margin-top: 4px;">Create custom reports with specific date ranges and filters</div>
+              </div>
+              <button onclick="downloadReport('Custom Report', 'PDF')" style="padding: 12px 22px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 12px; color: white; font-size: 13px; font-weight: 700; cursor: pointer;">Create Report</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSettings() {
+      return `
+        <div>
+          <div style="margin-bottom: 32px;">
+            <div style="font-size: 32px; font-weight: 800; color: white; letter-spacing: -0.5px;">Settings</div>
+            <div style="color: #71717a; font-size: 14px; margin-top: 6px;">Customize your dashboard</div>
+          </div>
+          
+          <div style="display: grid; gap: 20px; max-width: 600px;">
+            <div style="padding: 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px;">
+              <div style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">🔔 Notifications</div>
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div><div style="color: white; font-size: 15px; font-weight: 500;">Push Notifications</div><div style="color: #71717a; font-size: 13px; margin-top: 4px;">Receive alerts on your device</div></div>
+                <button onclick="toggleSetting('notifications')" style="width: 52px; height: 28px; background: ${state.settings.notifications ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '#3f3f46'}; border: none; border-radius: 14px; cursor: pointer; position: relative; transition: background 0.3s;">
+                  <span style="position: absolute; top: 3px; ${state.settings.notifications ? 'right: 3px' : 'left: 3px'}; width: 22px; height: 22px; background: white; border-radius: 50%; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                </button>
+              </div>
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div><div style="color: white; font-size: 15px; font-weight: 500;">Auto Refresh</div><div style="color: #71717a; font-size: 13px; margin-top: 4px;">Update data automatically</div></div>
+                <button onclick="toggleSetting('autoRefresh')" style="width: 52px; height: 28px; background: ${state.settings.autoRefresh ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '#3f3f46'}; border: none; border-radius: 14px; cursor: pointer; position: relative; transition: background 0.3s;">
+                  <span style="position: absolute; top: 3px; ${state.settings.autoRefresh ? 'right: 3px' : 'left: 3px'}; width: 22px; height: 22px; background: white; border-radius: 50%; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                </button>
+              </div>
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 0;">
+                <div><div style="color: white; font-size: 15px; font-weight: 500;">Dark Mode</div><div style="color: #71717a; font-size: 13px; margin-top: 4px;">Use dark theme</div></div>
+                <button onclick="toggleSetting('darkMode')" style="width: 52px; height: 28px; background: ${state.settings.darkMode ? 'linear-gradient(135deg, #f59e0b, #d97706)' : '#3f3f46'}; border: none; border-radius: 14px; cursor: pointer; position: relative; transition: background 0.3s;">
+                  <span style="position: absolute; top: 3px; ${state.settings.darkMode ? 'right: 3px' : 'left: 3px'}; width: 22px; height: 22px; background: white; border-radius: 50%; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                </button>
+              </div>
+            </div>
+            
+            <div style="padding: 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px;">
+              <div style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">📏 Units</div>
+              <div style="display: flex; gap: 10px;">
+                <button onclick="setUnits('imperial')" style="flex: 1; padding: 14px; background: ${state.settings.units === 'imperial' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${state.settings.units === 'imperial' ? 'transparent' : 'rgba(255,255,255,0.1)'}; border-radius: 12px; color: ${state.settings.units === 'imperial' ? '#0a0a0b' : '#a1a1aa'}; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Imperial (mi, gal)</button>
+                <button onclick="setUnits('metric')" style="flex: 1; padding: 14px; background: ${state.settings.units === 'metric' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${state.settings.units === 'metric' ? 'transparent' : 'rgba(255,255,255,0.1)'}; border-radius: 12px; color: ${state.settings.units === 'metric' ? '#0a0a0b' : '#a1a1aa'}; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">Metric (km, L)</button>
+              </div>
+            </div>
+            
+            <div style="padding: 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 18px;">
+              <div style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">👤 Account</div>
+              <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 20px;">
+                <div style="width: 72px; height: 72px; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 18px; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px; font-weight: 700;">MS</div>
+                <div>
+                  <div style="color: white; font-size: 20px; font-weight: 600;">Mike Smith</div>
+                  <div style="color: #71717a; font-size: 14px; margin-top: 4px;">mike.smith@smithfleet.com</div>
+                  <div style="color: #a1a1aa; font-size: 13px; margin-top: 2px;">Fleet Manager</div>
+                </div>
+              </div>
+              <button style="width: 100%; padding: 14px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 12px; color: #f87171; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.15)';" onmouseout="this.style.background='rgba(239,68,68,0.1)';">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderModal() {
+      if (!state.showModal || !state.modalVehicle) return '';
+      const v = state.modalVehicle;
+      return `
+        <div onclick="closeModal(event)" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+          <div onclick="event.stopPropagation()" style="background: linear-gradient(135deg, #18181b, #1f1f23); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+              <div style="color: white; font-size: 24px; font-weight: 800;">${v.name}</div>
+              <button onclick="closeModal(event)" style="background: rgba(255,255,255,0.1); border: none; width: 36px; height: 36px; border-radius: 10px; color: #a1a1aa; cursor: pointer; font-size: 20px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)';" onmouseout="this.style.background='rgba(255,255,255,0.1)';">×</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+              <div style="width: 64px; height: 64px; background: linear-gradient(135deg, ${getStatusColor(v.status)}, ${getStatusColor(v.status)}cc); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; font-weight: 700;">${v.avatar}</div>
+              <div>
+                <div style="color: #fbbf24; font-family: monospace; font-size: 15px; font-weight: 600;">${v.id}</div>
+                <div style="color: white; font-size: 17px; font-weight: 600; margin-top: 4px;">${v.driver}</div>
+                <span style="display: inline-block; padding: 4px 10px; background: ${getStatusBg(v.status)}; border-radius: 14px; color: ${getStatusColor(v.status)}; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 6px;">${v.status}</span>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+              <div style="padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: #71717a; font-size: 12px;">Location</div><div style="color: white; font-size: 14px; margin-top: 4px;">${v.location}</div></div>
+              <div style="padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: #71717a; font-size: 12px;">Mileage</div><div style="color: white; font-size: 14px; margin-top: 4px;">${v.mileage.toLocaleString()} mi</div></div>
+              <div style="padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: #71717a; font-size: 12px;">Trips</div><div style="color: white; font-size: 14px; margin-top: 4px;">${v.trips}</div></div>
+              <div style="padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: #71717a; font-size: 12px;">Revenue</div><div style="color: #34d399; font-size: 14px; margin-top: 4px;">$${v.revenue.toLocaleString()}</div></div>
+            </div>
+            <div style="padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;"><span style="color: #71717a; font-size: 12px;">Fuel Level</span><span style="color: ${getFuelColor(v.fuel)}; font-size: 14px; font-weight: 700;">${v.fuel}%</span></div>
+              <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 8px;"><div style="width: ${v.fuel}%; height: 100%; background: linear-gradient(90deg, ${getFuelColor(v.fuel)}, ${getFuelColor(v.fuel)}cc); border-radius: 8px;"></div></div>
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <button onclick="downloadReport('Vehicle Report - ${v.id}', 'PDF'); closeModal(event);" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 14px; font-weight: 700; cursor: pointer;">⬇ Download Report</button>
+              <button onclick="closeModal(event)" style="flex: 1; padding: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 14px; font-weight: 600; cursor: pointer;">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAddModal() {
+      if (!state.showAddModal) return '';
+      return `
+        <div onclick="closeAddModal(event)" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+          <div onclick="event.stopPropagation()" style="background: linear-gradient(135deg, #18181b, #1f1f23); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+              <div style="color: white; font-size: 24px; font-weight: 800;">Add New Vehicle</div>
+              <button onclick="closeAddModal(event)" style="background: rgba(255,255,255,0.1); border: none; width: 36px; height: 36px; border-radius: 10px; color: #a1a1aa; cursor: pointer; font-size: 20px;">×</button>
+            </div>
+            <div style="margin-bottom: 16px;"><label style="display: block; color: #a1a1aa; font-size: 13px; font-weight: 500; margin-bottom: 8px;">Vehicle Name</label><input id="vName" type="text" placeholder="e.g., Freightliner M2" style="width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 15px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(245,158,11,0.5)';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';"></div>
+            <div style="margin-bottom: 16px;"><label style="display: block; color: #a1a1aa; font-size: 13px; font-weight: 500; margin-bottom: 8px;">Driver Name</label><input id="dName" type="text" placeholder="e.g., John Smith" style="width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 15px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(245,158,11,0.5)';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';"></div>
+            <div style="margin-bottom: 24px;"><label style="display: block; color: #a1a1aa; font-size: 13px; font-weight: 500; margin-bottom: 8px;">Location</label><input id="vLoc" type="text" placeholder="e.g., Depot Alpha" style="width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 15px; outline: none; box-sizing: border-box; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(245,158,11,0.5)';" onblur="this.style.borderColor='rgba(255,255,255,0.1)';"></div>
+            <div style="display: flex; gap: 12px;">
+              <button onclick="addVehicle()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 12px; color: #0a0a0b; font-size: 14px; font-weight: 700; cursor: pointer;">Add Vehicle</button>
+              <button onclick="closeAddModal(event)" style="flex: 1; padding: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 14px; font-weight: 600; cursor: pointer;">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderToast() {
+      if (!state.showDownloadToast) return '';
+      return `
+        <div style="position: fixed; bottom: 30px; right: 30px; background: linear-gradient(135deg, #10b981, #059669); padding: 18px 24px; border-radius: 16px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 40px rgba(16,185,129,0.4); z-index: 1001; animation: slideIn 0.3s ease;">
+          <span style="font-size: 24px;">✓</span>
+          <div>
+            <div style="color: white; font-size: 15px; font-weight: 700;">Download Started</div>
+            <div style="color: rgba(255,255,255,0.8); font-size: 13px; margin-top: 2px;">${state.downloadedReport}</div>
+          </div>
+        </div>
+        <style>@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }</style>
+      `;
+    }
+
+    function render() {
+      const pages = { dashboard: renderDashboard, fleet: renderFleet, drivers: renderDrivers, maintenance: renderMaintenance, reports: renderReports, settings: renderSettings };
+      document.getElementById('app').innerHTML = `
+        <div style="min-height: 100vh; position: relative;">
+          <div style="position: fixed; top: -200px; left: 30%; width: 500px; height: 500px; background: radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%); pointer-events: none;"></div>
+          <div style="position: fixed; bottom: -200px; right: 10%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%); pointer-events: none;"></div>
+          <div style="display: flex; min-height: 100vh;">
+            ${renderSidebar()}
+            <div style="flex: 1; padding: 32px 40px; overflow: auto;">${pages[state.page]()}</div>
+          </div>
+          ${renderModal()}
+          ${renderAddModal()}
+          ${renderToast()}
+          <div style="position: fixed; bottom: 20px; right: 20px; display: flex; align-items: center; gap: 8px; padding: 10px 18px; background: rgba(24,24,27,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; backdrop-filter: blur(10px);">
+            <span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite;"></span>
+            <span style="color: #a1a1aa; font-size: 12px; font-weight: 500;">System Online</span>
+          </div>
+          <style>@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }</style>
+        </div>
+      `;
+    }
+
+    function navigate(page) { state.page = page; render(); }
+    function setFilter(f) { state.filter = f; render(); }
+    function openModal(id) { state.modalVehicle = vehicles.find(v => v.id === id); state.showModal = true; render(); }
+    function closeModal(e) { if(e) e.stopPropagation(); state.showModal = false; render(); }
+    function openAddModal() { state.showAddModal = true; render(); }
+    function closeAddModal(e) { if(e) e.stopPropagation(); state.showAddModal = false; render(); }
+    function toggleSetting(key) { state.settings[key] = !state.settings[key]; render(); }
+    function setUnits(u) { state.settings.units = u; render(); }
+
+    function downloadReport(name, format) {
+      state.downloadedReport = name + '.' + format.toLowerCase();
+      state.showDownloadToast = true;
+      render();
+      setTimeout(() => { state.showDownloadToast = false; render(); }, 3000);
+    }
+
+    function addVehicle() {
+      const name = document.getElementById('vName').value;
+      const driver = document.getElementById('dName').value;
+      const location = document.getElementById('vLoc').value;
+      if (name && driver && location) {
+        vehicles.push({ id: 'SM-' + String(vehicles.length + 1).padStart(3, '0'), name, driver, avatar: driver.split(' ').map(n => n[0]).join(''), status: 'idle', fuel: 100, location, speed: 0, mileage: 0, phone: '(555) 000-0000', email: driver.toLowerCase().replace(' ', '.') + '@smith.com', trips: 0, revenue: 0 });
+        state.showAddModal = false; render();
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>
